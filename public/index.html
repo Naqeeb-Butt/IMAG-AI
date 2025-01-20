@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Image Generator | AI 图像生成器</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="fav-icon.JPG" type="image/x-icon">
+</head>
+<body>
+    <div class="min-h-screen">
+        <!-- Navbar -->
+        <nav class="navbar">
+            <div class="nav-content">
+                <div class="logo">
+                    <img src="Image-AI.png" alt="logo" style="height: 80px;" width="80px">
+                </div>
+                <div class="nav-right">
+                    <select id="languageSelect" class="language-select">
+                        <option value="en">English</option>
+                        <option value="zh">简体中文</option>
+                    </select>
+                    <div class="auth-buttons">
+                        <button class="sign-in-btn" data-en="Sign In" data-zh="登录" onclick="window.location.href='signin.html'">Sign In</button>
+                        <button class="sign-up-btn" data-en="Sign Up" data-zh="注册" onclick="window.location.href='signup.html'">Sign Up</button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="content-grid">
+                <!-- Left Column - Generated Image -->
+                <div class="image-preview">
+                    <img src="https://images.unsplash.com/photo-1506744038136-46273834b3fb" alt="Generated landscape">
+                </div>
+
+                <!-- Right Column - Generator Controls -->
+                <div class="controls-section">
+                    <div class="header">
+                        <h1 data-en="Free Online AI Image Generator" data-zh="免费在线 AI 图像生成器">Free Online AI Image Generator</h1>
+                        <p data-en="Dream it up, then add it to your design. Watch your words and phrases transform into beautiful images with the best AI image generators available at your fingertips." 
+                           data-zh="想象它，然后将其添加到您的设计中。观看您的文字和短语通过最好的 AI 图像生成器转变为美丽的图像。">
+                            Dream it up, then add it to your design. Watch your words and phrases transform into beautiful images with the best AI image generators available at your fingertips.
+                        </p>
+                    </div>
+
+                    <!-- Search Input -->
+                    <div class="search-container">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="search-icon">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                        <input type="text" id="promptInput" data-placeholder-en="Describe the image you want to create..." data-placeholder-zh="描述您想要创建的图像..." placeholder="Describe the image you want to create...">
+                    </div>
+
+                    <!-- Generate Button -->
+                    <button class="generate-button" id="generateButton">Generate Image</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Function to handle the button click and generate the image
+        document.getElementById("generateButton").addEventListener("click", async () => {
+            const promptInput = document.getElementById("promptInput");
+            const userPrompt = promptInput.value.trim();
+            const imagePreview = document.querySelector(".image-preview img");
+
+            if (!userPrompt) {
+                alert("Please enter a prompt.");
+                return;
+            }
+
+            // Clear the current image while generating a new one
+            imagePreview.src = ""; 
+
+            // Show a loading state (optional)
+            imagePreview.alt = "Loading...";
+
+            try {
+                // Make a request to the backend to generate the image
+                const response = await fetch(`/generate-image?prompt=${encodeURIComponent(userPrompt)}`);
+
+                if (response.ok) {
+                    // Set the image source to the generated image
+                    imagePreview.src = "/generated_image.png";  // Assuming the image is saved in the public folder
+                    imagePreview.alt = "Generated Image";
+                } else {
+                    alert("Failed to generate the image.");
+                }
+            } catch (error) {
+                console.error("Error:", error);
+                alert("An error occurred while generating the image.");
+            }
+        });
+    </script>
+    <script type="module">
+        import { signInWithGoogle, signOutUser } from "./register.js";
+    
+        // Attach event listeners for manual sign-in if needed
+        document.querySelector(".google-btn")?.addEventListener("click", signInWithGoogle);
+    </script>
+    <script type="module">
+        import { signUpUser } from "./register.js";
+      
+        document.querySelector("#signup-form").addEventListener("submit", async (event) => {
+          event.preventDefault();
+      
+          const username = document.querySelector("input[placeholder='Full Name']").value;
+          const email = document.querySelector("input[placeholder='Email']").value;
+          const password = document.querySelector("input[placeholder='Password']").value;
+      
+          try {
+            await signUpUser(username, email, password);
+            alert("Signup successful! Please login.");
+            window.location.href = "signin.html";
+          } catch (error) {
+            alert(error.message);
+          }
+        });
+      </script>
+      <script src="script.js"></script>
+      <script src="register.js"></script>
+
+      <footer class="footer">
+        <p>&copy; 2025 IMAGAI Generator. All rights reserved. Powered by 
+            <a href="mailto:robosoftworks.iot@gmail.com" class="footer-link">RoboSoft Works</a>
+        </p>
+    </footer> 
+
+</body>
+</html>
