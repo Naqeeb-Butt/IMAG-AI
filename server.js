@@ -18,7 +18,7 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Constants
-const API_URL = "https://api-inference.huggingface.co/models/strangerzonehf/Flux-Midjourney-Mix-LoRA";
+const API_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2";
 const MAX_RETRIES = 20;
 const RETRY_DELAY = 5000;
 const IMAGE_DIR = "generated_images"; // Separate directory for generated images
@@ -76,24 +76,10 @@ app.get("/generate-image", async (req, res) => {
                     method: 'post',
                     url: API_URL,
                     headers: {
-                        Authorization: `Bearer ${process.env.HUGGING_FACE_API_TOKEN}`,
-                        'Content-Type': 'application/json',
-                        'x-use-cache': 'true'
+                        Authorization: `Bearer ${process.env.HUGGING_FACE_API_TOKEN}`
                     },
-                    data: {
-                        inputs: `midjourney mix, ${userPrompt}`,
-                        parameters: {
-                            guidance_scale: 7.0,
-                            num_inference_steps: 25,
-                            target_size: {
-                                width: 768,
-                                height: 768
-                            },
-                            negative_prompt: "blurry, bad quality"
-                        }
-                    },
-                    responseType: 'arraybuffer',
-                    timeout: 180000
+                    data: { inputs: userPrompt },
+                    responseType: 'arraybuffer'
                 });
 
                 if (response.headers["content-type"].startsWith("image")) {
@@ -115,25 +101,18 @@ app.get("/generate-image", async (req, res) => {
             } catch (error) {
                 console.error('API Error:', {
                     status: error.response?.status,
-                    data: error.response?.data?.toString('utf8'),
+                    data: error.response?.data,
                     message: error.message
                 });
 
-                if (error.response?.data?.toString('utf8').startsWith('<!DOCTYPE html>') || 
-                    error.response?.data?.toString('utf8').startsWith('<html>')) {
-                    console.log('Received HTML response, retrying...');
+                if (error.response?.status === 503) {
+                    const estimatedTime = JSON.parse(error.response.data)?.estimated_time || 0;
+                    const waitTime = Math.max(RETRY_DELAY, estimatedTime * 1000);
+                    console.log(`Model loading. Waiting ${waitTime/1000}s before retry ${retries + 1}/${MAX_RETRIES}`);
                     retries++;
-                    await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+                    await new Promise(resolve => setTimeout(resolve, waitTime));
                     continue;
                 }
-
-                if (error.response?.status === 503 || error.response?.status === 504) {
-                    console.log(`Model loading or gateway timeout. Retry attempt ${retries + 1} of ${MAX_RETRIES}...`);
-                    retries++;
-                    await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
-                    continue;
-                }
-
                 throw error;
             }
         }
