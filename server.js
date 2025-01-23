@@ -19,9 +19,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Constants
 const API_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2";
-const MAX_RETRIES = 10;
-const RETRY_DELAY = 3000;
-const IMAGE_DIR = "generated_images"; // Separate directory for generated images
+const MAX_RETRIES = 20;
+const RETRY_DELAY = 5000;
+const IMAGE_DIR = "generated_images";
 
 // Add this after the constants
 function clearImageDirectory() {
@@ -83,15 +83,29 @@ app.get("/generate-image", async (req, res) => {
                 });
 
                 if (response.headers["content-type"].startsWith("image")) {
+                    // Create directory if it doesn't exist
+                    const imagesDir = path.join(__dirname, "public", IMAGE_DIR);
+                    if (!fs.existsSync(imagesDir)) {
+                        fs.mkdirSync(imagesDir, { recursive: true });
+                    }
+
                     const timestamp = Date.now();
-                    const fileName = `${timestamp}_${userPrompt.slice(0, 30).replace(/[^a-z0-9]/gi, '_')}.png`;
+                    const sanitizedPrompt = userPrompt.slice(0, 30).replace(/[^a-z0-9]/gi, '_');
+                    const fileName = `${timestamp}_${sanitizedPrompt}.png`;
                     const imagePath = path.join(imagesDir, fileName);
+                    
+                    // Write file
                     fs.writeFileSync(imagePath, response.data);
+                    
+                    // Log for debugging
+                    console.log('Image saved to:', imagePath);
+                    console.log('Sending URL:', `/${IMAGE_DIR}/${fileName}`);
                     
                     return res.json({ 
                         success: true,
-                        imageUrl: `/${IMAGE_DIR}/${fileName}?t=${timestamp}`,
-                        prompt: userPrompt
+                        imageUrl: `/${IMAGE_DIR}/${fileName}`,
+                        prompt: userPrompt,
+                        timestamp: timestamp // Add timestamp for cache busting
                     });
                 }
 
