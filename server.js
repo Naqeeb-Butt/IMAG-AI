@@ -21,6 +21,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 const API_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2";
 const MAX_RETRIES = 20;
 const RETRY_DELAY = 5000;
+const IMAGE_DIR = "generated_images"; // Separate directory for generated images
 
 // Image generation endpoint
 app.get("/generate-image", async (req, res) => {
@@ -37,6 +38,23 @@ app.get("/generate-image", async (req, res) => {
     let retries = 0;
 
     try {
+        // Create images directory if it doesn't exist
+        const imagesDir = path.join(__dirname, "public", IMAGE_DIR);
+        if (!fs.existsSync(imagesDir)) {
+            fs.mkdirSync(imagesDir, { recursive: true });
+        }
+
+        // Clean up old images (optional)
+        const files = fs.readdirSync(imagesDir);
+        files.forEach(file => {
+            const filePath = path.join(imagesDir, file);
+            const stats = fs.statSync(filePath);
+            // Delete files older than 1 hour
+            if (Date.now() - stats.mtime.getTime() > 3600000) {
+                fs.unlinkSync(filePath);
+            }
+        });
+
         while (retries < MAX_RETRIES) {
             try {
                 console.log('Making API request with prompt:', userPrompt);
@@ -51,19 +69,15 @@ app.get("/generate-image", async (req, res) => {
                 });
 
                 if (response.headers["content-type"].startsWith("image")) {
-                    const publicDir = path.join(__dirname, "public");
-                    if (!fs.existsSync(publicDir)) {
-                        fs.mkdirSync(publicDir);
-                    }
-
                     const timestamp = Date.now();
-                    const imagePath = path.join(publicDir, `generated_image_${timestamp}.png`);
+                    const fileName = `${timestamp}_${userPrompt.slice(0, 30).replace(/[^a-z0-9]/gi, '_')}.png`;
+                    const imagePath = path.join(imagesDir, fileName);
                     fs.writeFileSync(imagePath, response.data);
                     
-                    // Send the image URL instead of the file
                     return res.json({ 
                         success: true,
-                        imageUrl: `/generated_image_${timestamp}.png`
+                        imageUrl: `/${IMAGE_DIR}/${fileName}`,
+                        prompt: userPrompt // Send back the prompt for verification
                     });
                 }
 
@@ -73,21 +87,26 @@ app.get("/generate-image", async (req, res) => {
             } catch (error) {
                 console.error('API Error:', {
                     status: error.response?.status,
-                    data: error.response?.data?.toString(),
+                    data: error.response?.data,
                     message: error.message
                 });
 
                 if (error.response?.status === 503) {
-                    console.log(`Retry attempt ${retries + 1} of ${MAX_RETRIES}...`);
+                    const estimatedTime = JSON.parse(error.response.data)?.estimated_time || 0;
+                    const waitTime = Math.max(RETRY_DELAY, estimatedTime * 1000);
+                    console.log(`Model loading. Waiting ${waitTime/1000}s before retry ${retries + 1}/${MAX_RETRIES}`);
                     retries++;
-                    await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+                    await new Promise(resolve => setTimeout(resolve, waitTime));
                     continue;
                 }
                 throw error;
             }
         }
 
-        return res.status(503).json({ error: "Service unavailable after retries" });
+        return res.status(503).json({ 
+            error: "Service unavailable after retries",
+            message: "The AI model is still loading. Please try again in a few minutes."
+        });
 
     } catch (error) {
         console.error("Error generating image:", error);
