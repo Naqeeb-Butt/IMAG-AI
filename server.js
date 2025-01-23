@@ -79,11 +79,11 @@ app.get("/generate-image", async (req, res) => {
                         Authorization: `Bearer ${process.env.HUGGING_FACE_API_TOKEN}`,
                         'Content-Type': 'application/json'
                     },
-                    data: {
-                        inputs: userPrompt,
-                        wait_for_model: true
-                    },
-                    responseType: 'arraybuffer'
+                    data: JSON.stringify({ 
+                        inputs: userPrompt 
+                    }),
+                    responseType: 'arraybuffer',
+                    timeout: 60000  // 60 second timeout
                 });
 
                 if (response.headers["content-type"].startsWith("image")) {
@@ -105,18 +105,18 @@ app.get("/generate-image", async (req, res) => {
             } catch (error) {
                 console.error('API Error:', {
                     status: error.response?.status,
-                    data: error.response?.data,
+                    data: error.response?.data?.toString(),
                     message: error.message
                 });
 
-                if (error.response?.status === 503) {
-                    const estimatedTime = JSON.parse(error.response.data)?.estimated_time || 0;
-                    const waitTime = Math.max(RETRY_DELAY, estimatedTime * 1000);
-                    console.log(`Model loading. Waiting ${waitTime/1000}s before retry ${retries + 1}/${MAX_RETRIES}`);
+                if (error.response?.status === 503 || error.response?.status === 504) {
+                    console.log(`Retry attempt ${retries + 1} of ${MAX_RETRIES}...`);
                     retries++;
-                    await new Promise(resolve => setTimeout(resolve, waitTime));
+                    await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
                     continue;
                 }
+
+                // If we get here, it's a different error
                 throw error;
             }
         }
