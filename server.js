@@ -1,22 +1,28 @@
-const express = require("express");
-const axios = require("axios");
-const path = require("path");
-const fs = require("fs");
-const dotenv = require("dotenv");
-dotenv.config();
+require('dotenv').config();
+const express = require('express');
+const axios = require('axios');
+const path = require('path');
+const fs = require('fs');
+const cors = require('cors');
+
 const app = express();
-const port = 49152;
+const PORT = 49152; // Different port from LOGOAI
 
-// Hugging Face API URL and headers
+// Middleware
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Constants
 const API_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2";
-const headers = {
-    "Authorization": `Bearer ${process.env.HUGGING_FACE_API_TOKEN}`  // Fixed template literal syntax
-};
+const MAX_RETRIES = 10;
+const RETRY_DELAY = 3000;
 
-// Serve static files from the "public" folder
-app.use(express.static(path.join(__dirname, "public")));
-
-// Endpoint to generate image
+// Image generation endpoint
 app.get("/generate-image", async (req, res) => {
     const userPrompt = req.query.prompt;
 
@@ -24,76 +30,93 @@ app.get("/generate-image", async (req, res) => {
         return res.status(400).json({ error: "Prompt is required" });
     }
 
-    const retryDelay = 3000; // Retry every 3 seconds
-    const maxRetries = 10; // Retry up to 10 times
+    if (!process.env.HUGGING_FACE_API_TOKEN) {
+        return res.status(500).json({ error: "API token not configured" });
+    }
+
     let retries = 0;
 
     try {
-        while (retries < maxRetries) {
+        while (retries < MAX_RETRIES) {
             try {
-                // Make the API request to Hugging Face
-                const response = await axios.post(API_URL, {
-                    inputs: userPrompt,
-                }, {
-                    headers: headers,
+                console.log('Making API request with prompt:', userPrompt);
+                const response = await axios({
+                    method: 'post',
+                    url: API_URL,
+                    headers: {
+                        Authorization: `Bearer ${process.env.HUGGING_FACE_API_TOKEN}`
+                    },
+                    data: { inputs: userPrompt },
                     responseType: 'arraybuffer'
                 });
 
-                // If the response contains image data
                 if (response.headers["content-type"].startsWith("image")) {
-                    // Ensure public directory exists
                     const publicDir = path.join(__dirname, "public");
                     if (!fs.existsSync(publicDir)) {
                         fs.mkdirSync(publicDir);
                     }
 
-                    // Save the image to the file system
-                    const imagePath = path.join(publicDir, "generated_image.png");
+                    const timestamp = Date.now();
+                    const imagePath = path.join(publicDir, `generated_image_${timestamp}.png`);
                     fs.writeFileSync(imagePath, response.data);
+                    
+                    // Send the image URL instead of the file
+                    return res.json({ 
+                        success: true,
+                        imageUrl: `/generated_image_${timestamp}.png`
+                    });
+                }
 
-                    // Send the image back to the client
-                    return res.sendFile(imagePath);
-                } else if (response.status === 503) {
-                    // If the service is unavailable, wait and retry
-                    console.log(`Retry attempt ${retries + 1} of ${maxRetries}...`);
-                    retries++;
-                    await new Promise(resolve => setTimeout(resolve, retryDelay));
-                } else {
-                    return res.status(500).json({ error: "Failed to generate image, invalid response" });
-                }
+                console.log('Unexpected response type:', response.headers["content-type"]);
+                return res.status(500).json({ error: "Invalid response type from API" });
+
             } catch (error) {
-                if (error.response && error.response.status === 503) {
-                    console.log(`Retry attempt ${retries + 1} of ${maxRetries}...`);
+                console.error('API Error:', {
+                    status: error.response?.status,
+                    data: error.response?.data?.toString(),
+                    message: error.message
+                });
+
+                if (error.response?.status === 503) {
+                    console.log(`Retry attempt ${retries + 1} of ${MAX_RETRIES}...`);
                     retries++;
-                    await new Promise(resolve => setTimeout(resolve, retryDelay));
-                } else {
-                    throw error;
+                    await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+                    continue;
                 }
+                throw error;
             }
         }
 
-        // If max retries reached, return error
-        return res.status(503).json({ error: "Service is still unavailable after multiple attempts" });
+        return res.status(503).json({ error: "Service unavailable after retries" });
 
     } catch (error) {
-        console.error("Error generating image:", error.message);
-        return res.status(500).json({ 
-            error: "Error generating image",
-            details: error.message 
+        console.error("Error generating image:", error);
+        return res.status(500).json({
+            error: "Failed to generate image",
+            details: error.message
         });
     }
 });
 
-app.get('/check-env', (req, res) => {
-    res.send(`HUGGINGFACE_API_KEY: ${process.env.HUGGINGFACE_API_KEY}`);
+// Health check endpoint
+app.get('/health', (req, res) => {
+    res.status(200).json({ 
+        status: 'OK',
+        apiKeyExists: !!process.env.HUGGING_FACE_API_TOKEN
+    });
 });
 
-// Catch-all route for serving the frontend
-app.get('*', (req, res) => {
-    res.sendFile(path.resolve(__dirname, 'public', 'index.html'));
+// Error handler
+app.use((err, req, res, next) => {
+    console.error('Server Error:', err);
+    res.status(500).json({
+        error: 'Internal Server Error',
+        message: err.message
+    });
 });
 
-// Start the server
-app.listen(49152, '0.0.0.0', () => { 
-  console.log('Server is running on port 49152');
+// Start server
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Image AI Server running at http://0.0.0.0:${PORT}`);
+    console.log('API Token exists:', !!process.env.HUGGING_FACE_API_TOKEN);
 });
