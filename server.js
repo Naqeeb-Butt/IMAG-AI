@@ -84,6 +84,15 @@ app.get("/generate-image", async (req, res) => {
     }
 });
 
+app.get('/check-env', (req, res) => {
+    res.send(`HUGGINGFACE_API_KEY: ${process.env.HUGGINGFACE_API_KEY}`);
+});
+
+// Catch-all route for serving the frontend
+app.get('*', (req, res) => {
+    res.sendFile(path.resolve(__dirname, 'public', 'index.html'));
+});
+
 // Start the server
 app.listen(49152, '0.0.0.0', () => { 
   console.log('Server is running on port 49152');
