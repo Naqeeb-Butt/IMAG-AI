@@ -86,12 +86,21 @@
                 const data = await response.json();
 
                 if (response.ok && data.success) {
-                    // Force reload by adding timestamp
-                    imagePreview.src = `${data.imageUrl}?t=${data.timestamp}`;
-                    imagePreview.alt = `Generated image for: ${data.prompt}`;
+                    const newImage = new Image();
                     
-                    // Log for debugging
-                    console.log('Setting image source to:', imagePreview.src);
+                    newImage.onload = () => {
+                        imagePreview.src = newImage.src;
+                        imagePreview.alt = `Generated image for: ${data.prompt}`;
+                    };
+                    
+                    newImage.onerror = (err) => {
+                        console.error('Image load error:', err);
+                        alert('Failed to load the generated image');
+                    };
+                    
+                    // Force cache bypass
+                    newImage.src = `${data.imageUrl}?t=${Date.now()}`;
+                    console.log('Loading image from:', newImage.src);
                 } else {
                     alert(data.message || "Failed to generate the image.");
                 }
