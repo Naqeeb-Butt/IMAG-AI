@@ -81,11 +81,7 @@ app.get("/generate-image", async (req, res) => {
                     },
                     data: {
                         inputs: userPrompt,
-                        parameters: {
-                            guidance_scale: 7.5,  // Controls how closely the model follows the prompt
-                            num_inference_steps: 50,  // Higher number = better quality but slower
-                            negative_prompt: "blurry, bad quality, distorted, disfigured", // Things to avoid
-                        }
+                        wait_for_model: true
                     },
                     responseType: 'arraybuffer'
                 });
