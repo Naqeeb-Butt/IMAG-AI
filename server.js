@@ -8,7 +8,7 @@ const app = express();
 const port = 49152;
 
 // Hugging Face API URL and headers
-const API_URL = "https://api-inference.huggingface.co/models/strangerzonehf/Flux-Midjourney-Mix-LoRA";
+const API_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2";
 const headers = {
     "Authorization": `Bearer ${process.env.HUGGING_FACE_API_TOKEN}`  // Fixed template literal syntax
 };
