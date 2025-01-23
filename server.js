@@ -77,22 +77,23 @@ app.get("/generate-image", async (req, res) => {
                     url: API_URL,
                     headers: {
                         Authorization: `Bearer ${process.env.HUGGING_FACE_API_TOKEN}`,
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'x-use-cache': 'true'
                     },
                     data: {
                         inputs: `midjourney mix, ${userPrompt}`,
                         parameters: {
-                            guidance_scale: 7.5,
-                            num_inference_steps: 35,
+                            guidance_scale: 7.0,
+                            num_inference_steps: 25,
                             target_size: {
-                                width: 1024,
-                                height: 1024
+                                width: 768,
+                                height: 768
                             },
-                            negative_prompt: "blurry, bad quality, distorted, disfigured, ugly, bad anatomy"
+                            negative_prompt: "blurry, bad quality"
                         }
                     },
                     responseType: 'arraybuffer',
-                    timeout: 120000
+                    timeout: 180000
                 });
 
                 if (response.headers["content-type"].startsWith("image")) {
