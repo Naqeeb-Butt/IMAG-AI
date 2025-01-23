@@ -80,14 +80,19 @@ app.get("/generate-image", async (req, res) => {
                         'Content-Type': 'application/json'
                     },
                     data: {
-                        inputs: userPrompt,
-                        options: {
-                            wait_for_model: true,
-                            use_cache: false
+                        inputs: `midjourney mix, ${userPrompt}`,
+                        parameters: {
+                            guidance_scale: 7.5,
+                            num_inference_steps: 35,
+                            target_size: {
+                                width: 1024,
+                                height: 1024
+                            },
+                            negative_prompt: "blurry, bad quality, distorted, disfigured, ugly, bad anatomy"
                         }
                     },
                     responseType: 'arraybuffer',
-                    timeout: 60000
+                    timeout: 120000
                 });
 
                 if (response.headers["content-type"].startsWith("image")) {
