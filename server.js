@@ -79,11 +79,15 @@ app.get("/generate-image", async (req, res) => {
                         Authorization: `Bearer ${process.env.HUGGING_FACE_API_TOKEN}`,
                         'Content-Type': 'application/json'
                     },
-                    data: JSON.stringify({ 
-                        inputs: userPrompt 
-                    }),
+                    data: {
+                        inputs: userPrompt,
+                        options: {
+                            wait_for_model: true,
+                            use_cache: false
+                        }
+                    },
                     responseType: 'arraybuffer',
-                    timeout: 60000  // 60 second timeout
+                    timeout: 60000
                 });
 
                 if (response.headers["content-type"].startsWith("image")) {
@@ -105,18 +109,25 @@ app.get("/generate-image", async (req, res) => {
             } catch (error) {
                 console.error('API Error:', {
                     status: error.response?.status,
-                    data: error.response?.data?.toString(),
+                    data: error.response?.data?.toString('utf8'),
                     message: error.message
                 });
 
-                if (error.response?.status === 503 || error.response?.status === 504) {
-                    console.log(`Retry attempt ${retries + 1} of ${MAX_RETRIES}...`);
+                if (error.response?.data?.toString('utf8').startsWith('<!DOCTYPE html>') || 
+                    error.response?.data?.toString('utf8').startsWith('<html>')) {
+                    console.log('Received HTML response, retrying...');
                     retries++;
                     await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
                     continue;
                 }
 
-                // If we get here, it's a different error
+                if (error.response?.status === 503 || error.response?.status === 504) {
+                    console.log(`Model loading or gateway timeout. Retry attempt ${retries + 1} of ${MAX_RETRIES}...`);
+                    retries++;
+                    await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+                    continue;
+                }
+
                 throw error;
             }
         }
