@@ -18,10 +18,24 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Constants
-const API_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2";
-const MAX_RETRIES = 20;
-const RETRY_DELAY = 5000;
+const API_URL = "https://api-inference.huggingface.co/models/strangerzonehf/Flux-Midjourney-Mix-LoRA";
+const MAX_RETRIES = 10;
+const RETRY_DELAY = 3000;
 const IMAGE_DIR = "generated_images"; // Separate directory for generated images
+
+// Add this after the constants
+function clearImageDirectory() {
+    const imagesDir = path.join(__dirname, "public", IMAGE_DIR);
+    if (fs.existsSync(imagesDir)) {
+        fs.readdirSync(imagesDir).forEach(file => {
+            const filePath = path.join(imagesDir, file);
+            fs.unlinkSync(filePath);
+        });
+    }
+}
+
+// Add this before app.listen
+clearImageDirectory();
 
 // Image generation endpoint
 app.get("/generate-image", async (req, res) => {
@@ -62,9 +76,17 @@ app.get("/generate-image", async (req, res) => {
                     method: 'post',
                     url: API_URL,
                     headers: {
-                        Authorization: `Bearer ${process.env.HUGGING_FACE_API_TOKEN}`
+                        Authorization: `Bearer ${process.env.HUGGING_FACE_API_TOKEN}`,
+                        'Content-Type': 'application/json'
                     },
-                    data: { inputs: userPrompt },
+                    data: {
+                        inputs: userPrompt,
+                        parameters: {
+                            guidance_scale: 7.5,  // Controls how closely the model follows the prompt
+                            num_inference_steps: 50,  // Higher number = better quality but slower
+                            negative_prompt: "blurry, bad quality, distorted, disfigured", // Things to avoid
+                        }
+                    },
                     responseType: 'arraybuffer'
                 });
 
@@ -76,8 +98,8 @@ app.get("/generate-image", async (req, res) => {
                     
                     return res.json({ 
                         success: true,
-                        imageUrl: `/${IMAGE_DIR}/${fileName}`,
-                        prompt: userPrompt // Send back the prompt for verification
+                        imageUrl: `/${IMAGE_DIR}/${fileName}?t=${timestamp}`,
+                        prompt: userPrompt
                     });
                 }
 
