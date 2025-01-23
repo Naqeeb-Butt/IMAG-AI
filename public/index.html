@@ -83,13 +83,14 @@
             try {
                 // Make a request to the backend to generate the image
                 const response = await fetch(`/generate-image?prompt=${encodeURIComponent(userPrompt)}`);
+                const data = await response.json();
 
-                if (response.ok) {
-                    // Set the image source to the generated image
-                    imagePreview.src = "/generated_image.png";  // Assuming the image is saved in the public folder
-                    imagePreview.alt = "Generated Image";
+                if (response.ok && data.success) {
+                    // Set the image source to the generated image URL
+                    imagePreview.src = data.imageUrl;  // Use the URL from the response
+                    imagePreview.alt = `Generated image for: ${userPrompt}`;
                 } else {
-                    alert("Failed to generate the image.");
+                    alert(data.message || "Failed to generate the image.");
                 }
             } catch (error) {
                 console.error("Error:", error);
