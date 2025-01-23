@@ -19,8 +19,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Constants
 const API_URL = "https://api-inference.huggingface.co/models/strangerzonehf/Flux-Midjourney-Mix-LoRA";
-const MAX_RETRIES = 10;
-const RETRY_DELAY = 3000;
+const MAX_RETRIES = 20;
+const RETRY_DELAY = 5000;
 const IMAGE_DIR = "generated_images"; // Separate directory for generated images
 
 // Add this after the constants
