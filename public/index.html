@@ -86,9 +86,12 @@
                 const data = await response.json();
 
                 if (response.ok && data.success) {
-                    // Set the image source to the generated image URL
-                    imagePreview.src = data.imageUrl;  // Use the URL from the response
-                    imagePreview.alt = `Generated image for: ${userPrompt}`;
+                    // Force reload by adding timestamp
+                    imagePreview.src = `${data.imageUrl}?t=${data.timestamp}`;
+                    imagePreview.alt = `Generated image for: ${data.prompt}`;
+                    
+                    // Log for debugging
+                    console.log('Setting image source to:', imagePreview.src);
                 } else {
                     alert(data.message || "Failed to generate the image.");
                 }
