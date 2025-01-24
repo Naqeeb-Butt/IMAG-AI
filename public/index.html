@@ -74,39 +74,44 @@
                 return;
             }
 
-            // Clear the current image while generating a new one
+            // Show loading state
             imagePreview.src = ""; 
-
-            // Show a loading state (optional)
-            imagePreview.alt = "Loading...";
+            imagePreview.alt = "Generating image...";
 
             try {
-                // Make a request to the backend to generate the image
                 const response = await fetch(`/generate-image?prompt=${encodeURIComponent(userPrompt)}`);
                 const data = await response.json();
 
                 if (response.ok && data.success) {
-                    const newImage = new Image();
+                    // Create a temporary image to test loading
+                    const tempImage = new Image();
                     
-                    newImage.onload = () => {
-                        imagePreview.src = newImage.src;
+                    tempImage.onload = () => {
+                        console.log('Image loaded successfully');
+                        imagePreview.src = tempImage.src;
                         imagePreview.alt = `Generated image for: ${data.prompt}`;
                     };
                     
-                    newImage.onerror = (err) => {
+                    tempImage.onerror = (err) => {
                         console.error('Image load error:', err);
-                        alert('Failed to load the generated image');
+                        // Try direct URL as fallback
+                        imagePreview.src = data.imageUrl;
                     };
                     
-                    // Force cache bypass
-                    newImage.src = `${data.imageUrl}?t=${Date.now()}`;
-                    console.log('Loading image from:', newImage.src);
+                    // Add timestamp and random number to prevent caching
+                    const cacheBuster = `${Date.now()}-${Math.random()}`;
+                    tempImage.src = `${data.imageUrl}?cb=${cacheBuster}`;
+                    
+                    console.log('Attempting to load image from:', tempImage.src);
                 } else {
-                    alert(data.message || "Failed to generate the image.");
+                    console.error('Generation failed:', data);
+                    imagePreview.alt = "Generation failed";
+                    alert(data.message || "Failed to generate image");
                 }
             } catch (error) {
                 console.error("Error:", error);
-                alert("An error occurred while generating the image.");
+                imagePreview.alt = "Error occurred";
+                alert("An error occurred while generating the image");
             }
         });
     </script>
