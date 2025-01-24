@@ -15,49 +15,12 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
-app.use((req, res, next) => {
-    console.log('Request URL:', req.url);
-    console.log('Request Method:', req.method);
-    next();
-});
-app.use(express.static(path.join(__dirname, 'public'), {
-    setHeaders: (res, filePath) => {
-        if (filePath.endsWith('.png')) {
-            res.setHeader('Cache-Control', 'no-cache');
-            console.log('Serving image:', filePath);
-        }
-    }
-}));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Constants
 const API_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2";
-const MAX_RETRIES = 20;
-const RETRY_DELAY = 5000;
-const IMAGE_DIR = "generated_images";
-
-// Add this function near the top
-function ensureDirectoryExists() {
-    const imagesDir = path.join(__dirname, "public", IMAGE_DIR);
-    if (!fs.existsSync(imagesDir)) {
-        fs.mkdirSync(imagesDir, { recursive: true });
-    }
-    fs.chmodSync(imagesDir, '777');  // Full permissions
-    return imagesDir;
-}
-
-// Add this after the constants
-function clearImageDirectory() {
-    const imagesDir = path.join(__dirname, "public", IMAGE_DIR);
-    if (fs.existsSync(imagesDir)) {
-        fs.readdirSync(imagesDir).forEach(file => {
-            const filePath = path.join(imagesDir, file);
-            fs.unlinkSync(filePath);
-        });
-    }
-}
-
-// Add this before app.listen
-clearImageDirectory();
+const MAX_RETRIES = 10;
+const RETRY_DELAY = 3000;
 
 // Image generation endpoint
 app.get("/generate-image", async (req, res) => {
@@ -74,18 +37,6 @@ app.get("/generate-image", async (req, res) => {
     let retries = 0;
 
     try {
-        // Clean up old images (optional)
-        const imagesDir = ensureDirectoryExists();
-        const files = fs.readdirSync(imagesDir);
-        files.forEach(file => {
-            const filePath = path.join(imagesDir, file);
-            const stats = fs.statSync(filePath);
-            // Delete files older than 1 hour
-            if (Date.now() - stats.mtime.getTime() > 3600000) {
-                fs.unlinkSync(filePath);
-            }
-        });
-
         while (retries < MAX_RETRIES) {
             try {
                 console.log('Making API request with prompt:', userPrompt);
@@ -100,24 +51,19 @@ app.get("/generate-image", async (req, res) => {
                 });
 
                 if (response.headers["content-type"].startsWith("image")) {
+                    const publicDir = path.join(__dirname, "public");
+                    if (!fs.existsSync(publicDir)) {
+                        fs.mkdirSync(publicDir);
+                    }
+
                     const timestamp = Date.now();
-                    const sanitizedPrompt = userPrompt.slice(0, 30).replace(/[^a-z0-9]/gi, '_');
-                    const fileName = `${timestamp}_${sanitizedPrompt}.png`;
-                    const imagePath = path.join(imagesDir, fileName);
-                    
-                    // Write file
+                    const imagePath = path.join(publicDir, `generated_image_${timestamp}.png`);
                     fs.writeFileSync(imagePath, response.data);
-                    fs.chmodSync(imagePath, '644');  // Make image readable
                     
-                    // Log for debugging
-                    console.log('Image saved to:', imagePath);
-                    console.log('Sending URL:', `/${IMAGE_DIR}/${fileName}`);
-                    
+                    // Send the image URL instead of the file
                     return res.json({ 
                         success: true,
-                        imageUrl: `/${IMAGE_DIR}/${fileName}`,
-                        prompt: userPrompt,
-                        timestamp: timestamp // Add timestamp for cache busting
+                        imageUrl: `/generated_image_${timestamp}.png`
                     });
                 }
 
@@ -127,26 +73,21 @@ app.get("/generate-image", async (req, res) => {
             } catch (error) {
                 console.error('API Error:', {
                     status: error.response?.status,
-                    data: error.response?.data,
+                    data: error.response?.data?.toString(),
                     message: error.message
                 });
 
                 if (error.response?.status === 503) {
-                    const estimatedTime = JSON.parse(error.response.data)?.estimated_time || 0;
-                    const waitTime = Math.max(RETRY_DELAY, estimatedTime * 1000);
-                    console.log(`Model loading. Waiting ${waitTime/1000}s before retry ${retries + 1}/${MAX_RETRIES}`);
+                    console.log(`Retry attempt ${retries + 1} of ${MAX_RETRIES}...`);
                     retries++;
-                    await new Promise(resolve => setTimeout(resolve, waitTime));
+                    await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
                     continue;
                 }
                 throw error;
             }
         }
 
-        return res.status(503).json({ 
-            error: "Service unavailable after retries",
-            message: "The AI model is still loading. Please try again in a few minutes."
-        });
+        return res.status(503).json({ error: "Service unavailable after retries" });
 
     } catch (error) {
         console.error("Error generating image:", error);
@@ -163,21 +104,6 @@ app.get('/health', (req, res) => {
         status: 'OK',
         apiKeyExists: !!process.env.HUGGING_FACE_API_TOKEN
     });
-});
-
-// Add this debug route
-app.get("/debug-image/:filename", (req, res) => {
-    const filename = req.params.filename;
-    const imagePath = path.join(__dirname, "public", IMAGE_DIR, filename);
-    
-    console.log('Debug: Checking image path:', imagePath);
-    console.log('Debug: File exists:', fs.existsSync(imagePath));
-    
-    if (fs.existsSync(imagePath)) {
-        res.sendFile(imagePath);
-    } else {
-        res.status(404).send('Image not found');
-    }
 });
 
 // Error handler
