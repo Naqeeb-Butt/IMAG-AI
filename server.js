@@ -31,8 +31,8 @@ app.use(express.static(path.join(__dirname, 'public'), {
 
 // Constants
 const API_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2";
-const MAX_RETRIES = 10;
-const RETRY_DELAY = 3000;
+const MAX_RETRIES = 20;
+const RETRY_DELAY = 5000;
 const IMAGE_DIR = "generated_images";
 
 // Add this function near the top
@@ -163,6 +163,21 @@ app.get('/health', (req, res) => {
         status: 'OK',
         apiKeyExists: !!process.env.HUGGING_FACE_API_TOKEN
     });
+});
+
+// Add this debug route
+app.get("/debug-image/:filename", (req, res) => {
+    const filename = req.params.filename;
+    const imagePath = path.join(__dirname, "public", IMAGE_DIR, filename);
+    
+    console.log('Debug: Checking image path:', imagePath);
+    console.log('Debug: File exists:', fs.existsSync(imagePath));
+    
+    if (fs.existsSync(imagePath)) {
+        res.sendFile(imagePath);
+    } else {
+        res.status(404).send('Image not found');
+    }
 });
 
 // Error handler
