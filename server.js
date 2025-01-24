@@ -37,11 +37,11 @@ const IMAGE_DIR = "generated_images";
 
 // Add this function near the top
 function ensureDirectoryExists() {
-    const imagesDir = path.join("/var/www/imagai/public", IMAGE_DIR);
+    const imagesDir = path.join(__dirname, "public", IMAGE_DIR);
     if (!fs.existsSync(imagesDir)) {
         fs.mkdirSync(imagesDir, { recursive: true });
     }
-    fs.chmodSync(imagesDir, '755');
+    fs.chmodSync(imagesDir, '777');  // Full permissions
     return imagesDir;
 }
 
