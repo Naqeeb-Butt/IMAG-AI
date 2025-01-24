@@ -15,13 +15,35 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use((req, res, next) => {
+    console.log('Request URL:', req.url);
+    console.log('Request Method:', req.method);
+    next();
+});
+app.use(express.static(path.join(__dirname, 'public'), {
+    setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.png')) {
+            res.setHeader('Cache-Control', 'no-cache');
+            console.log('Serving image:', filePath);
+        }
+    }
+}));
 
 // Constants
 const API_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2";
-const MAX_RETRIES = 20;
-const RETRY_DELAY = 5000;
+const MAX_RETRIES = 10;
+const RETRY_DELAY = 3000;
 const IMAGE_DIR = "generated_images";
+
+// Add this function near the top
+function ensureDirectoryExists() {
+    const imagesDir = path.join("/var/www/imagai/public", IMAGE_DIR);
+    if (!fs.existsSync(imagesDir)) {
+        fs.mkdirSync(imagesDir, { recursive: true });
+    }
+    fs.chmodSync(imagesDir, '755');
+    return imagesDir;
+}
 
 // Add this after the constants
 function clearImageDirectory() {
@@ -52,13 +74,8 @@ app.get("/generate-image", async (req, res) => {
     let retries = 0;
 
     try {
-        // Create images directory if it doesn't exist
-        const imagesDir = path.join(__dirname, "public", IMAGE_DIR);
-        if (!fs.existsSync(imagesDir)) {
-            fs.mkdirSync(imagesDir, { recursive: true });
-        }
-
         // Clean up old images (optional)
+        const imagesDir = ensureDirectoryExists();
         const files = fs.readdirSync(imagesDir);
         files.forEach(file => {
             const filePath = path.join(imagesDir, file);
@@ -83,12 +100,6 @@ app.get("/generate-image", async (req, res) => {
                 });
 
                 if (response.headers["content-type"].startsWith("image")) {
-                    // Create directory if it doesn't exist
-                    const imagesDir = path.join(__dirname, "public", IMAGE_DIR);
-                    if (!fs.existsSync(imagesDir)) {
-                        fs.mkdirSync(imagesDir, { recursive: true });
-                    }
-
                     const timestamp = Date.now();
                     const sanitizedPrompt = userPrompt.slice(0, 30).replace(/[^a-z0-9]/gi, '_');
                     const fileName = `${timestamp}_${sanitizedPrompt}.png`;
@@ -96,6 +107,7 @@ app.get("/generate-image", async (req, res) => {
                     
                     // Write file
                     fs.writeFileSync(imagePath, response.data);
+                    fs.chmodSync(imagePath, '644');  // Make image readable
                     
                     // Log for debugging
                     console.log('Image saved to:', imagePath);
